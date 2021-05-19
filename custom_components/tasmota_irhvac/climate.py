@@ -788,6 +788,42 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
         """
         return self._swing_list
 
+    @property
+    def min_temp(self):
+        """Return the minimum temperature."""
+        if self._min_temp:
+            return self._min_temp
+
+        # get default temp from super class
+        return super().min_temp
+
+    @property
+    def max_temp(self):
+        """Return the maximum temperature."""
+        if self._max_temp:
+            return self._max_temp
+
+        # Get default temp from super class
+        return super().max_temp
+
+    @callback
+    def _async_update_temp(self, state):
+        """Update thermostat with latest state from sensor."""
+        try:
+            self._cur_temp = float(state.state)
+        except ValueError as ex:
+            _LOGGER.debug("Unable to update from sensor: %s", ex)
+
+    @property
+    def _is_device_active(self):
+        """If the toggleable device is currently active."""
+        return self.power_mode == STATE_ON
+
+    @property
+    def supported_features(self):
+        """Return the list of supported features."""
+        return self._support_flags
+
     async def async_set_hvac_mode(self, hvac_mode):
         """Set hvac mode."""
         if hvac_mode not in self._hvac_list or hvac_mode == HVAC_MODE_OFF:
@@ -914,24 +950,6 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
              for attribute in ATTRIBUTES_IRHVAC}
         )
 
-    @property
-    def min_temp(self):
-        """Return the minimum temperature."""
-        if self._min_temp:
-            return self._min_temp
-
-        # get default temp from super class
-        return super().min_temp
-
-    @property
-    def max_temp(self):
-        """Return the maximum temperature."""
-        if self._max_temp:
-            return self._max_temp
-
-        # Get default temp from super class
-        return super().max_temp
-
     async def _async_sensor_changed(self, entity_id, old_state, new_state):
         """Handle temperature changes."""
         if new_state is None:
@@ -939,24 +957,6 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
 
         self._async_update_temp(new_state)
         await self.async_update_ha_state()
-
-    @callback
-    def _async_update_temp(self, state):
-        """Update thermostat with latest state from sensor."""
-        try:
-            self._cur_temp = float(state.state)
-        except ValueError as ex:
-            _LOGGER.debug("Unable to update from sensor: %s", ex)
-
-    @property
-    def _is_device_active(self):
-        """If the toggleable device is currently active."""
-        return self.power_mode == STATE_ON
-
-    @property
-    def supported_features(self):
-        """Return the list of supported features."""
-        return self._support_flags
 
     async def async_set_preset_mode(self, preset_mode):
         """Set new preset mode.
