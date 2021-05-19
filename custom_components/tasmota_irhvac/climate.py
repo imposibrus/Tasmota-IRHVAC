@@ -113,6 +113,7 @@ from .const import (
     CONF_TURBO,
     CONF_ECONO,
     CONF_MODEL,
+    CONF_MODEL_ON,
     CONF_CELSIUS,
     CONF_LIGHT,
     CONF_FILTER,
@@ -231,6 +232,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_TURBO, default=DEFAULT_CONF_TURBO): cv.string,
         vol.Optional(CONF_ECONO, default=DEFAULT_CONF_ECONO): cv.string,
         vol.Optional(CONF_MODEL, default=DEFAULT_CONF_MODEL): cv.string,
+        vol.Optional(CONF_MODEL_ON, default=DEFAULT_CONF_MODEL): cv.string,
         vol.Optional(CONF_CELSIUS, default=DEFAULT_CONF_CELSIUS): cv.string,
         vol.Optional(CONF_LIGHT, default=DEFAULT_CONF_LIGHT): cv.string,
         vol.Optional(CONF_FILTER, default=DEFAULT_CONF_FILTER): cv.string,
@@ -325,6 +327,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     turbo = config[CONF_TURBO]
     econo = config[CONF_ECONO]
     model = config[CONF_MODEL]
+    model_on = config[CONF_MODEL_ON]
     celsius = config[CONF_CELSIUS]
     light = config[CONF_LIGHT]
     filters = config[CONF_FILTER]
@@ -363,6 +366,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         turbo,
         econo,
         model,
+        model_on,
         celsius,
         light,
         filters,
@@ -434,6 +438,7 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
         turbo,
         econo,
         model,
+        model_on,
         celsius,
         light,
         filters,
@@ -479,6 +484,7 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
         self._turbo = turbo.lower()
         self._econo = econo.lower()
         self._model = model
+        self._model_on = model_on
         self._celsius = celsius
         self._light = light.lower()
         self._filters = filters.lower()
@@ -486,6 +492,7 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
         self._beep = beep.lower()
         self._sleep = sleep.lower()
         self._sub_state = None
+        self._turning_on = False
         self._state_attrs = {}
         self._state_attrs.update(
             {attribute: getattr(self, '_' + attribute)
@@ -790,6 +797,8 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
         else:
             self._hvac_mode = hvac_mode
             self._enabled = True
+            if self.power_mode != STATE_ON:
+                self._turning_on = True
             self.power_mode = STATE_ON
         # Ensure we update the current operation after changing the mode
         await self.async_send_cmd(False)
@@ -797,6 +806,7 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
     async def async_turn_on(self):
         """Turn thermostat on."""
         self.power_mode = STATE_ON
+        self._turning_on = True
         await self.async_send_cmd(False)
 
     async def async_turn_off(self):
@@ -983,12 +993,19 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
             swing_h = STATE_AUTO
         elif self.swing_mode == SWING_VERTICAL:
             swing_v = STATE_AUTO
+
+        # hack for some hisense model:
+        if self._turning_on and self._model_on != DEFAULT_CONF_MODEL:
+            model = self._model_on
+        else:
+            model = self._model
+
         # Populate the payload
         payload_data = {
             "Vendor": self._vendor,
-            "Model": self._model,
-            "Power": self.power_mode,
+            "Model": model,
             "Mode": self._hvac_mode,
+            "Power": self.power_mode,
             "Celsius": self._celsius,
             "Temp": self._target_temp,
             "FanSpeed": fan_speed,
@@ -1006,3 +1023,5 @@ class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
         payload = (json.dumps(payload_data))
         # Publish mqtt message
         mqtt.async_publish(self.hass, self.topic, payload)
+
+        self._turning_on = False
