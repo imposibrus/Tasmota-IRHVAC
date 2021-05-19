@@ -3,6 +3,8 @@ import json
 import logging
 import uuid
 import asyncio
+from abc import ABC
+
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 
@@ -408,7 +410,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         )
 
 
-class TasmotaIrhvac(ClimateEntity, RestoreEntity):
+class TasmotaIrhvac(ClimateEntity, RestoreEntity, ABC):
     """Representation of a Generic Thermostat device."""
 
     def __init__(
